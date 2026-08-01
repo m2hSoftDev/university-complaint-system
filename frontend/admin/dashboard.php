@@ -54,9 +54,28 @@ try {
          LIMIT 5"
     )->fetchAll();
 
+    // 5. Recent Complaints for Dashboard Dispatch
+    $recentComplaints = $pdo->query(
+        "SELECT c.*, cs.status_name, cc.category_name, b.building_name, u.name as student_name,
+                a.assignment_id, a.assignment_status, tu.name as assigned_staff_name
+         FROM complaints c
+         JOIN complaint_status cs ON c.status_id = cs.status_id
+         JOIN complaint_categories cc ON c.category_id = cc.category_id
+         JOIN buildings b ON c.building_id = b.building_id
+         JOIN students s ON c.student_id = s.student_id
+         JOIN users u ON s.user_id = u.user_id
+         LEFT JOIN assignments a ON c.complaint_id = a.complaint_id AND a.assignment_status != 'Rejected'
+         LEFT JOIN maintenance_staff ms ON a.staff_id = ms.staff_id
+         LEFT JOIN users tu ON ms.user_id = tu.user_id
+         ORDER BY c.created_at DESC
+         LIMIT 6"
+    )->fetchAll();
+
+    $staffList = getAvailableStaff($pdo);
+
 } catch (Exception $e) {
     $totalComplaints = $pendingComplaints = $inProgressCount = $resolvedComplaints = 0;
-    $categoryData = $buildingData = $staffPerf = [];
+    $categoryData = $buildingData = $staffPerf = $recentComplaints = $staffList = [];
 }
 
 // Convert PHP arrays to JSON for ChartJS consumption
@@ -201,33 +220,174 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- Quick Operations Control -->
-    <div class="card">
-        <div class="card-header">
-            <h3><i class="fas fa-cogs text-gradient"></i> Directory Controls</h3>
+</div>
+
+<!-- ─── Recent Complaints & Quick Dispatch ─── -->
+<div class="card stagger-in mt-lg">
+    <div class="card-header">
+        <h3><i class="fas fa-clipboard-list text-gradient"></i> Recent Complaints & Dispatch</h3>
+        <a href="<?= FRONTEND_URL ?>/admin/complaints.php" class="btn btn-outline btn-sm">Dispatch Center <i class="fas fa-arrow-right" style="margin-left: 4px;"></i></a>
+    </div>
+    
+    <div class="card-body">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Complaint Ref</th>
+                        <th>Student Name</th>
+                        <th>Complaint details</th>
+                        <th>Category</th>
+                        <th>Location</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Staff Assigned</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($recentComplaints)): ?>
+                        <tr>
+                            <td colspan="9" class="table-empty">
+                                <i class="fas fa-clipboard-list"></i>
+                                <p>No campus complaint dispatches logged in system.</p>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($recentComplaints as $c): ?>
+                            <tr>
+                                <td>#CMP-<?= str_pad($c['complaint_id'], 4, '0', STR_PAD_LEFT) ?></td>
+                                <td><?= sanitize($c['student_name']) ?></td>
+                                <td>
+                                    <div class="font-semibold text-primary"><?= sanitize($c['title']) ?></div>
+                                    <div class="text-sm text-muted text-truncate" style="max-width: 200px;">
+                                        <?= sanitize($c['description']) ?>
+                                    </div>
+                                </td>
+                                <td><?= sanitize($c['category_name']) ?></td>
+                                <td><?= sanitize($c['building_name']) ?></td>
+                                <td><?= getPriorityBadge($c['priority']) ?></td>
+                                <td><?= getStatusBadge($c['status_name']) ?></td>
+                                <td>
+                                    <?php if ($c['assigned_staff_name']): ?>
+                                        <span class="text-primary font-semibold">
+                                            <i class="fas fa-user-cog"></i> <?= sanitize($c['assigned_staff_name']) ?>
+                                        </span>
+                                        <div class="text-sm text-muted">(<?= sanitize($c['assignment_status']) ?>)</div>
+                                    <?php elseif (!in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
+                                        <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px;">
+                                            <i class="fas fa-user-plus"></i> Assign Technician
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="text-muted">Unassigned</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-right">
+                                    <div class="table-actions" style="justify-content: flex-end; gap: 6px;">
+                                        <!-- View / Details Button -->
+                                        <button onclick='viewTicket(<?= json_encode($c) ?>)' class="btn btn-outline btn-sm" title="View details">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        
+                                        <!-- Assign Technician (Admin Only) Button -->
+                                        <?php if (!$c['assigned_staff_name'] && !in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
+                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-user-check"></i> Assign
+                                            </button>
+                                        <?php elseif (!in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
+                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-outline btn-sm">
+                                                <i class="fas fa-sync-alt"></i> Reassign
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
-        <div class="card-body" style="display: flex; flex-direction: column; gap: 16px;">
-            <a href="<?= BASE_URL ?>/admin/complaints.php" class="btn btn-primary w-full">
-                <i class="fas fa-clipboard-list"></i> Ticket Dispatch Control
-            </a>
-            <a href="<?= BASE_URL ?>/admin/reports.php" class="btn btn-success w-full">
-                <i class="fas fa-chart-line"></i> Statistics & Reports
-            </a>
-            <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px;">
-                <h4 style="font-size: 13px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0.05em;">
-                    System Overview
-                </h4>
-                <ul style="display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--text-secondary);">
-                    <li class="flex items-center justify-between">
-                        <span>Active categories:</span>
-                        <strong><?= count($chartCategories) ?></strong>
-                    </li>
-                    <li class="flex items-center justify-between">
-                        <span>Campus locations:</span>
-                        <strong><?= count($chartBuildings) ?></strong>
-                    </li>
-                </ul>
+    </div>
+</div>
+
+<!-- Dispatch Assignment Modal Overlay -->
+<div class="modal-overlay" id="dispatch-modal">
+    <div class="modal" style="max-width: 460px;">
+        <div class="modal-header">
+            <h3>Dispatch Job Assignment</h3>
+            <button class="modal-close" onclick="Modal.close('dispatch-modal')"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="dispatch-form" onsubmit="assignStaff(event)">
+            <input type="hidden" name="complaint_id" id="m-complaint-id">
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="m-staff-id" class="form-label">Available Technicians <span class="required">*</span></label>
+                    <div class="input-group">
+                        <select name="staff_id" id="m-staff-id" class="form-control" required>
+                            <option value="">-- Choose Staff Member --</option>
+                            <?php foreach ($staffList as $staff): ?>
+                                <option value="<?= $staff['staff_id'] ?>">
+                                    <?= sanitize($staff['name']) ?> [<?= sanitize($staff['specialization'] ?: 'General Repairs') ?>] (<?= sanitize($staff['availability']) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <i class="fas fa-hard-hat input-group-icon"></i>
+                    </div>
+                </div>
             </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="Modal.close('dispatch-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Dispatch Job</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Ticket Specifications Modal Overlay -->
+<div class="modal-overlay" id="ticket-modal">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h3>Complaint Reference Specifications</h3>
+            <button class="modal-close" onclick="Modal.close('ticket-modal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="complaint-detail">
+                <div class="detail-main" style="grid-column: span 2;">
+                    <div class="detail-section">
+                        <div class="detail-row">
+                            <div class="detail-label">Summary Title</div>
+                            <div class="detail-value text-primary font-bold" id="v-title">Title</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Student Name</div>
+                            <div class="detail-value" id="v-student">Student</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Building / Location</div>
+                            <div class="detail-value" id="v-location">Location</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Submit Date</div>
+                            <div class="detail-value" id="v-date">Date</div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4 style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase;">Student Log Description</h4>
+                        <p id="v-description" style="color:var(--text-secondary); padding:16px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13.5px; line-height:1.6; white-space:pre-wrap;"></p>
+                    </div>
+
+                    <div class="detail-section text-center" id="v-image-container" style="display:none;">
+                        <h4 style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; text-align:left;">Attachment Reference</h4>
+                        <img id="v-image" src="#" alt="Dispatch preview image" class="complaint-image" style="max-height: 250px; display:inline-block; width:auto; border-radius:var(--radius-md);">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="Modal.close('ticket-modal')">Close Window</button>
         </div>
     </div>
 </div>
@@ -236,6 +396,47 @@ require_once __DIR__ . '/../includes/header.php';
 $extraScripts = "
 <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 <script>
+function openDispatchModal(id) {
+    document.getElementById('m-complaint-id').value = id;
+    Modal.open('dispatch-modal');
+}
+
+async function assignStaff(e) {
+    e.preventDefault();
+    if (!validateForm('dispatch-form')) return;
+
+    const formData = new FormData(document.getElementById('dispatch-form'));
+    const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/assign_complaint.php', 'POST', formData);
+    if (res.success) {
+        Toast.success('Dispatched', res.message);
+        Modal.close('dispatch-modal');
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        Toast.error('Failure', res.message);
+    }
+}
+
+function viewTicket(c) {
+    document.getElementById('v-title').textContent = c.title;
+    document.getElementById('v-student').textContent = c.student_name || '—';
+    document.getElementById('v-location').textContent = c.building_name;
+    document.getElementById('v-date').textContent = c.created_at;
+    document.getElementById('v-description').textContent = c.description;
+
+    const imgContainer = document.getElementById('v-image-container');
+    const imgElement = document.getElementById('v-image');
+    
+    if (c.image) {
+        imgElement.src = '" . BACKEND_URL . "/uploads/complaints/' + c.image;
+        imgContainer.style.display = 'block';
+    } else {
+        imgElement.src = '#';
+        imgContainer.style.display = 'none';
+    }
+
+    Modal.open('ticket-modal');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Category Chart
     const ctxCat = document.getElementById('categoryChart').getContext('2d');

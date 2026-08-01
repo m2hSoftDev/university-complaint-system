@@ -46,12 +46,14 @@ $perPage = (int)$pagination['per_page'];
 try {
     $stmt = $pdo->prepare(
         "SELECT a.*, c.title, c.description, c.priority, c.image as complaint_image, 
-                cc.category_name, b.building_name, cs.status_name, c.created_at as complaint_created
+                cc.category_name, b.building_name, cs.status_name, c.created_at as complaint_created, u.name as student_name
          FROM assignments a
          JOIN complaints c ON a.complaint_id = c.complaint_id
          JOIN complaint_categories cc ON c.category_id = cc.category_id
          JOIN buildings b ON c.building_id = b.building_id
          JOIN complaint_status cs ON c.status_id = cs.status_id
+         JOIN students s ON c.student_id = s.student_id
+         JOIN users u ON s.user_id = u.user_id
          $whereClause
          ORDER BY c.priority = 'High' DESC, a.assigned_date DESC
          LIMIT {$offset}, {$perPage}"
@@ -158,6 +160,7 @@ require_once __DIR__ . '/../includes/header.php';
                                 </td>
                                 <td class="text-right">
                                     <div class="table-actions" style="justify-content: flex-end;">
+                                        <button onclick='viewTask(<?= json_encode($task) ?>)' class="btn btn-outline btn-sm btn-icon" title="View details"><i class="fas fa-eye"></i></button>
                                         <?php if ($task['assignment_status'] === 'Assigned'): ?>
                                             <button onclick="handleStatus(<?= $task['assignment_id'] ?>, 'Accepted')" class="btn btn-success btn-sm">Accept</button>
                                             <button onclick="handleStatus(<?= $task['assignment_id'] ?>, 'Rejected')" class="btn btn-danger btn-sm">Reject</button>
@@ -184,17 +187,119 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
+<!-- Task Details Modal Overlay for Technician -->
+<div class="modal-overlay" id="task-modal">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h3>Assigned Job Specifications</h3>
+            <button class="modal-close" onclick="Modal.close('task-modal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="complaint-detail">
+                <div class="detail-main" style="grid-column: span 2;">
+                    <div class="detail-section">
+                        <div class="detail-row">
+                            <div class="detail-label">Job Title</div>
+                            <div class="detail-value text-primary font-bold" id="vt-title">Title</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Student Name</div>
+                            <div class="detail-value" id="vt-student">Student</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Building / Location</div>
+                            <div class="detail-value" id="vt-location">Location</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Category</div>
+                            <div class="detail-value" id="vt-category">Category</div>
+                        </div>
+                        <div class="detail-row">
+                            <div class="detail-label">Submitted On</div>
+                            <div class="detail-value" id="vt-date">Date</div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4 style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase;">Student Log Description</h4>
+                        <p id="vt-description" style="color:var(--text-secondary); padding:16px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13.5px; line-height:1.6; white-space:pre-wrap;"></p>
+                    </div>
+
+                    <div class="detail-section text-center" id="vt-image-container" style="display:none;">
+                        <h4 style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; text-align:left;">Attachment Reference Image</h4>
+                        <img id="vt-image" src="#" alt="Complaint photo preview" class="complaint-image" style="max-height: 250px; display:inline-block; width:auto; border-radius:var(--radius-md); cursor:pointer;" onclick="window.open(this.src)">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" id="vt-modal-footer">
+            <button class="btn btn-outline" onclick="Modal.close('task-modal')">Close Window</button>
+        </div>
+    </div>
+</div>
+
 <?php 
 $extraScripts = "
 <script>
+let currentTask = null;
+
+function viewTask(task) {
+    currentTask = task;
+    document.getElementById('vt-title').textContent = task.title;
+    document.getElementById('vt-student').textContent = task.student_name || '—';
+    document.getElementById('vt-location').textContent = task.building_name;
+    document.getElementById('vt-category').textContent = task.category_name;
+    document.getElementById('vt-date').textContent = task.complaint_created || task.assigned_date;
+    document.getElementById('vt-description').textContent = task.description;
+
+    const imgContainer = document.getElementById('vt-image-container');
+    const imgElement = document.getElementById('vt-image');
+    
+    if (task.complaint_image) {
+        imgElement.src = '" . BACKEND_URL . "/uploads/complaints/' + task.complaint_image;
+        imgContainer.style.display = 'block';
+    } else {
+        imgElement.src = '#';
+        imgContainer.style.display = 'none';
+    }
+
+    const footer = document.getElementById('vt-modal-footer');
+    if (task.assignment_status === 'Assigned') {
+        footer.innerHTML = `
+            <button class=\"btn btn-outline\" onclick=\"Modal.close('task-modal')\">Close</button>
+            <button onclick=\"handleStatusFromModal('Rejected')\" class=\"btn btn-danger\">Reject Job</button>
+            <button onclick=\"handleStatusFromModal('Accepted')\" class=\"btn btn-success\">Accept Job</button>
+        `;
+    } else if (task.assignment_status === 'Accepted') {
+        footer.innerHTML = `
+            <button class=\"btn btn-outline\" onclick=\"Modal.close('task-modal')\">Close</button>
+            <a href=\"" . FRONTEND_URL . "/staff/update_progress.php?id=\${task.assignment_id}\" class=\"btn btn-primary\">Update Progress</a>
+        `;
+    } else {
+        footer.innerHTML = `<button class=\"btn btn-outline\" onclick=\"Modal.close('task-modal')\">Close Window</button>`;
+    }
+
+    Modal.open('task-modal');
+}
+
+function handleStatusFromModal(newStatus) {
+    if (currentTask) {
+        Modal.close('task-modal');
+        handleStatus(currentTask.assignment_id, newStatus);
+    }
+}
+
 async function handleStatus(id, newStatus) {
-    const actionText = newStatus === 'Accepted' ? 'accept' : 'reject';
+    const isAccept = newStatus.toLowerCase().startsWith('accept');
+    const actionKey = isAccept ? 'accept' : 'reject';
+    const actionTitle = isAccept ? 'Accept' : 'Reject';
+
     confirmAction(
-        newStatus + ' Job Dispatch', 
-        'Are you sure you want to ' + actionText + ' this assignment?',
+        actionTitle + ' Job Dispatch', 
+        'Are you sure you want to ' + actionKey + ' this assignment?',
         async () => {
             const formData = new FormData();
-            formData.append('action', newStatus.toLowerCase());
+            formData.append('action', actionKey);
             formData.append('assignment_id', id);
             
             const res = await ajaxRequest('" . BACKEND_URL . "/staff/ajax/task_actions.php', 'POST', formData);

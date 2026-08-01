@@ -211,7 +211,7 @@ async function saveStaff(e) {
     if (!validateForm('staff-form')) return;
     
     const formData = new FormData(document.getElementById('staff-form'));
-    const res = await ajaxRequest('" . BASE_URL . "/admin/ajax/staff_crud.php', 'POST', formData);
+    const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/staff_crud.php', 'POST', formData);
     if (res.success) {
         Toast.success('Done', res.message);
         Modal.close('staff-modal');
@@ -230,7 +230,7 @@ function handleDelete(id) {
             formData.append('action', 'delete');
             formData.append('user_id', id);
             
-            const res = await ajaxRequest('" . BASE_URL . "/admin/ajax/staff_crud.php', 'POST', formData);
+            const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/staff_crud.php', 'POST', formData);
             if (res.success) {
                 Toast.success('Done', res.message);
                 setTimeout(() => location.reload(), 1000);

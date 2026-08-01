@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 requireLogin('staff');
 
 $staffId = $_SESSION['staff_id'];
-$action = sanitize($_POST['action'] ?? '');
+$action = strtolower(trim($_POST['action'] ?? ''));
 $assignmentId = isset($_POST['assignment_id']) ? (int)$_POST['assignment_id'] : 0;
 
 if ($assignmentId <= 0) {
@@ -27,7 +27,7 @@ try {
         jsonError('Assignment not found.');
     }
 
-    if ($action === 'accept') {
+    if ($action === 'accept' || $action === 'accepted') {
         if ($assignment['assignment_status'] !== 'Assigned') {
             jsonError('This task has already been processed.');
         }
@@ -71,7 +71,7 @@ try {
         $pdo->commit();
         jsonSuccess('Dispatch accepted. Job is now active.');
 
-    } elseif ($action === 'reject') {
+    } elseif ($action === 'reject' || $action === 'rejected') {
         if ($assignment['assignment_status'] !== 'Assigned') {
             jsonError('This task cannot be rejected anymore.');
         }

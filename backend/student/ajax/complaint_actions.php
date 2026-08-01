@@ -16,7 +16,6 @@ if ($action === 'delete') {
     }
     
     try {
-        // Enforce ownership and check status
         $stmt = $pdo->prepare(
             "SELECT c.*, cs.status_name 
              FROM complaints c

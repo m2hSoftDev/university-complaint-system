@@ -135,7 +135,7 @@ async function saveBuilding(e) {
     if (!validateForm('building-form')) return;
 
     const formData = new FormData(document.getElementById('building-form'));
-    const res = await ajaxRequest('" . BASE_URL . "/admin/ajax/location_crud.php', 'POST', formData);
+    const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/location_crud.php', 'POST', formData);
     if (res.success) {
         Toast.success('Success', res.message);
         Modal.close('building-modal');
@@ -159,7 +159,7 @@ function handleDelete(id, count) {
             formData.append('action', 'delete');
             formData.append('building_id', id);
 
-            const res = await ajaxRequest('" . BASE_URL . "/admin/ajax/location_crud.php', 'POST', formData);
+            const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/location_crud.php', 'POST', formData);
             if (res.success) {
                 Toast.success('Success', res.message);
                 setTimeout(() => location.reload(), 1000);

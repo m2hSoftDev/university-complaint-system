@@ -1,8 +1,4 @@
 <?php
-/**
- * Admin Ticket Dispatch Center
- * Campus Complaint & Maintenance Management System
- */
 require_once __DIR__ . '/../../backend/config/db.php';
 require_once __DIR__ . '/../../backend/includes/auth.php';
 require_once __DIR__ . '/../../backend/includes/functions.php';
@@ -39,7 +35,6 @@ if (!empty($buildingFilter)) {
 }
 
 try {
-    // Pagination setup
     $countStmt = $pdo->prepare(
         "SELECT COUNT(*) FROM complaints c
          JOIN complaint_status cs ON c.status_id = cs.status_id
@@ -81,7 +76,6 @@ try {
     $complaints = [];
 }
 
-// Fetch categories, locations, staff list for dropdowns & dispatch modal
 try {
     $categories = getCategories($pdo);
     $buildings = getBuildings($pdo);
@@ -150,7 +144,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Dispatch Table Card -->
 <div class="card stagger-in">
     <div class="card-body">
         <div class="table-container">
@@ -165,7 +158,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <th>Priority</th>
                         <th>Status</th>
                         <th>Staff Assigned</th>
-                        <th class="text-right">Action Board</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -203,21 +196,31 @@ require_once __DIR__ . '/../includes/header.php';
                                             <i class="fas fa-user-cog"></i> <?= sanitize($c['assigned_staff_name']) ?>
                                         </span>
                                         <div class="text-sm text-muted">(<?= sanitize($c['assignment_status']) ?>)</div>
+                                    <?php elseif (!in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
+                                        <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px;">
+                                            <i class="fas fa-user-plus"></i> Assign Technician
+                                        </button>
                                     <?php else: ?>
                                         <span class="text-muted">Unassigned</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-right">
-                                    <div class="table-actions" style="justify-content: flex-end;">
+                                    <div class="table-actions" style="justify-content: flex-end; gap: 6px;">
                                         <!-- View / Timeline Details -->
-                                        <button onclick="viewTicket(<?= json_encode($c) ?>)" class="btn btn-outline btn-sm btn-icon" title="View details"><i class="fas fa-eye"></i></button>
+                                        <button onclick='viewTicket(<?= json_encode($c) ?>)' class="btn btn-outline btn-sm" title="View details">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
                                         
                                         <!-- Assign Action Button -->
-                                        <?php if (!$c['assigned_staff_name'] && $c['status_name'] !== 'Resolved' && $c['status_name'] !== 'Closed' && $c['status_name'] !== 'Rejected'): ?>
-                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm">Assign</button>
-                                        <?php elseif ($c['status_name'] !== 'Resolved' && $c['status_name'] !== 'Closed' && $c['status_name'] !== 'Rejected'): ?>
+                                        <?php if (!$c['assigned_staff_name'] && !in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
+                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-user-check"></i> Assign
+                                            </button>
+                                        <?php elseif (!in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
                                             <!-- Re-assign -->
-                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-outline btn-sm">Reassign</button>
+                                            <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-outline btn-sm">
+                                                <i class="fas fa-sync-alt"></i> Reassign
+                                            </button>
                                         <?php endif; ?>
                                     </div>
                                 </td>
@@ -271,7 +274,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Ticket Specifications Modal Overlay -->
 <div class="modal-overlay" id="ticket-modal">
     <div class="modal modal-lg">
         <div class="modal-header">
@@ -327,7 +329,7 @@ async function assignStaff(e) {
     if (!validateForm('dispatch-form')) return;
 
     const formData = new FormData(document.getElementById('dispatch-form'));
-    const res = await ajaxRequest('" . BASE_URL . "/admin/assign_complaint.php', 'POST', formData);
+    const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/assign_complaint.php', 'POST', formData);
     if (res.success) {
         Toast.success('Dispatched', res.message);
         Modal.close('dispatch-modal');
@@ -343,7 +345,7 @@ async function updatePriority(id, value) {
     formData.append('complaint_id', id);
     formData.append('priority', value);
 
-    const res = await ajaxRequest('" . BASE_URL . "/admin/ajax/complaint_actions.php', 'POST', formData);
+    const res = await ajaxRequest('" . BACKEND_URL . "/admin/ajax/complaint_actions.php', 'POST', formData);
     if (res.success) {
         Toast.success('Updated', res.message);
     } else {
@@ -361,7 +363,7 @@ function viewTicket(c) {
     const imgElement = document.getElementById('v-image');
     
     if (c.image) {
-        imgElement.src = '" . BASE_URL . "/uploads/complaints/' + c.image;
+        imgElement.src = '" . BACKEND_URL . "/uploads/complaints/' + c.image;
         imgContainer.style.display = 'block';
     } else {
         imgElement.src = '#';
