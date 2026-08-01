@@ -6,7 +6,6 @@ require_once __DIR__ . '/../../backend/includes/functions.php';
 requireLogin('admin');
 
 try {
-    // 1. Core Metrics
     $totalComplaints = $pdo->query("SELECT COUNT(*) FROM complaints")->fetchColumn();
     
     $statusPendingId = getStatusIdByName($pdo, 'Pending') ?: 1;
@@ -21,7 +20,6 @@ try {
     $statusResolvedId = getStatusIdByName($pdo, 'Resolved') ?: 5;
     $resolvedComplaints = $pdo->query("SELECT COUNT(*) FROM complaints WHERE status_id = $statusResolvedId")->fetchColumn();
 
-    // 2. Fetch Category distribution
     $categoryData = $pdo->query(
         "SELECT cc.category_name, COUNT(c.complaint_id) as count 
          FROM complaint_categories cc
@@ -30,7 +28,6 @@ try {
          ORDER BY count DESC"
     )->fetchAll();
 
-    // 3. Fetch Building distribution
     $buildingData = $pdo->query(
         "SELECT b.building_name, COUNT(c.complaint_id) as count 
          FROM buildings b
@@ -39,7 +36,6 @@ try {
          ORDER BY count DESC"
     )->fetchAll();
 
-    // 4. Staff Performance Index (tasks completed, average rating)
     $staffPerf = $pdo->query(
         "SELECT u.name, ms.employee_id, ms.specialization,
                 COUNT(CASE WHEN a.assignment_status = 'Completed' THEN 1 END) as completed_tasks,
@@ -54,7 +50,6 @@ try {
          LIMIT 5"
     )->fetchAll();
 
-    // 5. Recent Complaints for Dashboard Dispatch
     $recentComplaints = $pdo->query(
         "SELECT c.*, cs.status_name, cc.category_name, b.building_name, u.name as student_name,
                 a.assignment_id, a.assignment_status, tu.name as assigned_staff_name
@@ -78,7 +73,6 @@ try {
     $categoryData = $buildingData = $staffPerf = $recentComplaints = $staffList = [];
 }
 
-// Convert PHP arrays to JSON for ChartJS consumption
 $chartCategories = [];
 $chartCategoryCounts = [];
 foreach ($categoryData as $cat) {
@@ -98,7 +92,6 @@ $currentPage = "dashboard";
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<!-- ─── Admin Metrics Cards ─── -->
 <div class="stats-grid stagger-in">
     <div class="stat-card stat-primary">
         <div class="stat-card-top">
@@ -137,9 +130,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- ─── Charts Display Section ─── -->
 <div class="charts-grid stagger-in mt-lg">
-    <!-- Chart 1: Category Distribution -->
     <div class="chart-card">
         <div class="chart-header">
             <h3><i class="fas fa-chart-pie text-gradient"></i> By Complaint Category</h3>
@@ -149,7 +140,6 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- Chart 2: Building Distribution -->
     <div class="chart-card">
         <div class="chart-header">
             <h3><i class="fas fa-chart-bar text-gradient"></i> By Campus Location</h3>
@@ -160,13 +150,10 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- ─── Performance Table & Quick Links ─── -->
 <div class="grid-3 stagger-in mt-lg" style="grid-template-columns: 2fr 1fr;">
-    <!-- Staff Performance -->
     <div class="card">
         <div class="card-header">
             <h3><i class="fas fa-user-shield text-gradient"></i> Staff Performance Rating</h3>
-            <a href="<?= BASE_URL ?>/admin/manage_staff.php" class="btn btn-outline btn-sm">Manage Staff</a>
         </div>
         <div class="card-body">
             <div class="table-container">
@@ -222,7 +209,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 </div>
 
-<!-- ─── Recent Complaints & Quick Dispatch ─── -->
 <div class="card stagger-in mt-lg">
     <div class="card-header">
         <h3><i class="fas fa-clipboard-list text-gradient"></i> Recent Complaints & Dispatch</h3>
@@ -284,12 +270,10 @@ require_once __DIR__ . '/../includes/header.php';
                                 </td>
                                 <td class="text-right">
                                     <div class="table-actions" style="justify-content: flex-end; gap: 6px;">
-                                        <!-- View / Details Button -->
                                         <button onclick='viewTicket(<?= json_encode($c) ?>)' class="btn btn-outline btn-sm" title="View details">
                                             <i class="fas fa-eye"></i> View
                                         </button>
                                         
-                                        <!-- Assign Technician (Admin Only) Button -->
                                         <?php if (!$c['assigned_staff_name'] && !in_array($c['status_name'], ['Resolved', 'Closed', 'Rejected'])): ?>
                                             <button onclick="openDispatchModal(<?= $c['complaint_id'] ?>)" class="btn btn-primary btn-sm">
                                                 <i class="fas fa-user-check"></i> Assign
@@ -310,7 +294,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Dispatch Assignment Modal Overlay -->
 <div class="modal-overlay" id="dispatch-modal">
     <div class="modal" style="max-width: 460px;">
         <div class="modal-header">
@@ -345,7 +328,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Ticket Specifications Modal Overlay -->
 <div class="modal-overlay" id="ticket-modal">
     <div class="modal modal-lg">
         <div class="modal-header">
